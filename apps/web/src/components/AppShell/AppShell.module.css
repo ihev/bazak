@@ -1,0 +1,46 @@
+.shell {
+  min-height: 100dvh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 4.5rem;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  color: var(--text);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.brand span {
+  margin-left: 0.6rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.badge {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.main {
+  width: min(46rem, 100%);
+  margin: 0 auto;
+  padding: clamp(2rem, 8vw, 6rem) 1.25rem;
+}
+
+@media (max-width: 420px) {
+  .brand span {
+    display: block;
+    margin: 0.2rem 0 0;
+    font-size: 0.85rem;
+  }
+}

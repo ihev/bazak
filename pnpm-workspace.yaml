@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  '@nestjs/core': false
+  better-sqlite3: true
+  esbuild: true
+
+strictPeerDependencies: true

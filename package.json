@@ -1,0 +1,33 @@
+{
+  "name": "bazak-shopping-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=12 <13"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @bazak/contracts build && concurrently --kill-others -n contracts,api,web \"pnpm --filter @bazak/contracts dev\" \"pnpm --filter @bazak/api dev\" \"pnpm --filter @bazak/web dev\"",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm --filter @bazak/contracts build && pnpm -r typecheck",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build",
+    "db:generate": "pnpm --filter @bazak/api db:generate",
+    "db:migrate": "pnpm --filter @bazak/api db:migrate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.0"
+  }
+}
