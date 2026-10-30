@@ -21,9 +21,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const message =
       exception instanceof HttpException && (status < 500 || status === 503)
         ? exception.message
-        : status === 503
-          ? 'Service unavailable. Please try again later.'
-          : 'An unexpected error occurred.';
+        : 'An unexpected error occurred.';
 
     if (status >= 500) {
       this.logger.error({

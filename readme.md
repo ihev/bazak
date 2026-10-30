@@ -1,112 +1,91 @@
 # Bazak Shopping Copilot
 
-A local conversational product discovery app using the DummyJSON product catalog.
+A local shopping assistant that turns natural-language requests into DummyJSON product searches. Products appear as cards inside chat; conversations and card snapshots survive refreshes and API restarts.
 
-## Current checkpoint
+## Run locally
 
-Stage 6 is complete: clean installation, migrations, startup, all 61 automated tests, and live Gemini and OpenAI checks pass. The review also fixed production builds inheriting the backend's development environment. The final README answers and submission materials still need completion in stage 7. See [the assignment compliance and review record](docs/assignment-review.md) for evidence and remaining requirements; this is not yet a final submission.
-
-## Requirements
-
-- Node.js 24
-- pnpm 12.6.0
-
-## Setup and run
-
-Run commands from the workspace root:
+Requirements: Node.js 24 and pnpm 12.6.0. Run commands from the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-Edit `.env` before starting the API:
+Set these values in `.env`:
 
 ```dotenv
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=your-local-key
-GEMINI_MODEL=your-enabled-model-id
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your-assignment-key
+OPENAI_MODEL=gpt-5.4-mini
 ```
 
-Use the exact Gemini model ID available to your account. To use the assignment provider instead, set `LLM_PROVIDER=openai`, supply `OPENAI_API_KEY`, and use `OPENAI_MODEL=gpt-5.4-mini` or `gpt-5.4-nano`. The API validates the selected provider configuration at startup. It does not automatically switch providers or retry paid LLM calls.
-
-Then run:
+Only `gpt-5.4-mini` and `gpt-5.4-nano` are accepted for OpenAI. Gemini is optional: set `LLM_PROVIDER=gemini`, `GEMINI_API_KEY` and an exact `GEMINI_MODEL` enabled for your account. Credentials stay on the backend. Never commit `.env` or put secrets in `VITE_` variables.
 
 ```sh
 pnpm db:migrate
 pnpm dev
 ```
 
-Open <http://localhost:5173>. The API runs on <http://127.0.0.1:3001/api>; `GET /api/health` verifies that the migrated database is readable. The Vite development server proxies `/api` requests to Nest.
+Open <http://localhost:5173>. The API listens at <http://127.0.0.1:3001/api>; Vite proxies `/api`. `GET /api/health` checks database readability. Migrations are explicit; rerun `pnpm db:migrate` after schema changes. Restart the development server after editing `.env`.
 
-Never commit `.env` or expose provider credentials using `VITE_` variables. LLM SDKs and credentials stay exclusively in the backend. Migration commands do not require LLM credentials.
+`API_HOST`, `API_PORT`, `WEB_PORT`, `WEB_ORIGIN` and `DATABASE_PATH` are configurable. Relative paths resolve from the repository root; shell variables override `.env`. If changing `WEB_PORT`, update `WEB_ORIGIN` too. Vite reads the shared file for host/port settings without inheriting its `NODE_ENV`; root mode-specific env files are not loaded.
 
-`API_HOST`, `API_PORT`, `WEB_PORT`, `WEB_ORIGIN`, and `DATABASE_PATH` can be configured in the root `.env` file. Relative database paths are resolved from the workspace root, regardless of the shell's working directory. If port 5173 is occupied, change `WEB_PORT` and update `WEB_ORIGIN` to match. Environment variables provided by the shell take precedence over `.env`.
+| Command                                                      | Purpose                                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------------- |
+| `pnpm check`                                                 | ESLint, Prettier, strict TypeScript and production builds       |
+| `pnpm build`                                                 | Build all workspace packages                                    |
+| `pnpm test`                                                  | Backend integration → browser E2E → backend/frontend unit tests |
+| `pnpm test:integration` / `pnpm test:e2e` / `pnpm test:unit` | Run individual suites                                           |
+| `pnpm db:generate` / `pnpm db:migrate`                       | Generate/apply Drizzle migrations                               |
+| `pnpm format`                                                | Apply formatting                                                |
 
-Vite reads the shared `.env` for server host and port settings using Node's environment parser. This does not change its build mode: `NODE_ENV=development` in the backend configuration must not turn `pnpm build` into a frontend development build. The normal root configuration uses this single `.env`; mode-specific root files are not loaded by the frontend configuration.
+## Architecture and framework choice
 
-## Commands
+The implementation uses a small custom workflow: one structured planning call followed by deterministic catalog retrieval and response composition. There is no autonomous tool loop. This makes model cost, allowed HTTP operations and persistence boundaries explicit, at the cost of maintaining provider adapters and chat state ourselves.
 
-| Command                          | Purpose                                                           |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `pnpm dev`                       | Build and watch shared contracts; run the API and web dev servers |
-| `pnpm build`                     | Build packages in dependency order                                |
-| `pnpm check`                     | Run lint, formatting checks, type checks, and builds              |
-| `pnpm lint`                      | Run ESLint with zero warnings allowed                             |
-| `pnpm format:check`              | Check formatting without modifying files                          |
-| `pnpm format`                    | Apply Prettier formatting                                         |
-| `pnpm typecheck`                 | Check TypeScript types                                            |
-| `pnpm db:generate`               | Generate a migration after changing the database schema           |
-| `pnpm db:migrate`                | Apply pending, versioned database migrations                      |
-| `pnpm test`                      | Run backend integration, browser E2E, then unit suites            |
-| `pnpm test:integration`          | Run Nest HTTP integration tests with a temporary SQLite database  |
-| `pnpm test:e2e`                  | Build the API test harness and run Chromium browser tests         |
-| `pnpm test:unit`                 | Run backend Jest and frontend Vitest/React Testing Library tests  |
-| `pnpm --filter @bazak/api start` | Start the built API                                               |
+- `apps/api`: NestJS modules for configuration, database, conversations, chat, products, LLM and logging. Controllers validate requests and delegate; small services coordinate behavior; repositories own SQL. Provider SDKs sit behind one interface. The DummyJSON client handles HTTP/schema conversion, while filtering and ranking are separate functions.
+- `apps/web`: React/Vite with CSS Modules. Components, HTTP functions and TanStack Query hooks are separate. Query owns server state, React owns local input, and React Router owns the active conversation URL. No additional state store is needed.
+- `packages/contracts`: public Zod schemas and inferred TypeScript types shared across the API and browser. Database records and provider types stay private. Responses use explicit public mappers; a common exception filter returns `{ error: { code, message } }`.
 
-Database migrations are explicit and are not run automatically at API startup. Run `pnpm db:migrate` after pulling schema changes. Generated SQL migrations and their Drizzle metadata belong in version control; the local database does not.
+Nest provides module boundaries and constructor injection for integration testing. SQLite/Drizzle avoids a database-server prerequisite for this local assignment. For a shared service, PostgreSQL would be preferable for concurrent workloads; the switch would require schema/migration changes while repositories contain its impact. TypeScript compilation preserves the decorator metadata Nest needs, including in tests.
 
-## Architecture
+Alternatives evaluated for this scope:
 
-- `apps/api`: NestJS backend with explicit feature modules. Controllers handle HTTP concerns; services coordinate behavior; repositories own database queries. Configuration, database lifecycle, and HTTP error handling are separate concerns.
-- `apps/web`: React and Vite frontend. Feature components, API functions, and TanStack Query hooks have separate responsibilities. React Router owns navigation. Local component state does not need Zustand at this stage.
-- `packages/contracts`: public Zod request/response schemas and inferred TypeScript types, built as ESM for the browser and Nest. Database models and provider SDK types stay private to the backend.
+| Alternative                                                               | Why it was not selected                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [LangChain](https://docs.langchain.com/oss/javascript/langchain/overview) | Its model/tool orchestration and middleware are useful for a tool loop. Here the model makes one bounded decision, and the server always executes the same retrieval pipeline. An extra orchestration layer would not remove the custom pagination, price filtering, transactions or retry rules. Reconsider it if multiple tools and iterative planning become necessary.                                                                                                                     |
+| [Vercel AI SDK](https://ai-sdk.dev/docs/introduction)                     | Its unified provider API and chat hooks could replace parts of the adapters/UI. This version returns a complete persisted conversation per request and already uses TanStack Query for history and optimistic updates. Adopting its chat state/transport would require mapping our persisted card snapshots and request-ID retries into that model; direct SDK adapters were smaller for this flow. Reconsider it when adding streaming or more providers. It does not require Vercel hosting. |
 
-The API is compiled with TypeScript's decorator metadata enabled, including during development, so Nest constructor injection behaves consistently in development and built code. The API TypeScript import-style lint exception preserves runtime class references required by decorator metadata.
+These are scope tradeoffs, not claims that either library cannot implement the application. Neither alternative was prototyped in this repository.
 
-`ChatService` owns turn persistence and lifecycle; `ChatDiscoveryService` constructs the bounded model context and coordinates catalog discovery. Factual result wording and product ranking/filtering are separate pure functions. Frontend mutation callbacks reconcile optimistic messages with server state; failed sends remain retryable without leaving the composer permanently blocked. Background refresh errors preserve cached history while an authoritative 404 replaces it. Local optimistic messages are not durable until the API accepts them, so an unsent message cannot survive a page refresh during a network outage.
+## Retrieval and conversation flow
 
-SQLite and Drizzle keep this local assignment easy to run without Docker or a database server. For a future shared service with greater concurrency and operational requirements, PostgreSQL would be the preferred database. Repositories contain the database-specific implementation, but changing databases still requires appropriate Drizzle schema changes and migrations.
+1. Save the user message as pending before external work.
+2. Give the planner available categories, previous search criteria and the latest 20 completed messages, including previously displayed product names/prices.
+3. Validate its structured decision with Zod: search, clarification, capability response or unsupported request. Reject invented categories and invalid price ranges.
+4. Execute searches on the server and compose a factual summary from actual results. Persist the assistant response, card snapshots and completed turn together.
 
-Connections enable foreign keys, a busy timeout, and WAL journaling. The database connection is closed during graceful shutdown. Failures do not automatically reset or delete data.
+Endpoints are chosen from the supplied `dummyjson_products_openapi.yaml`: `/products/category-list` (cached five minutes), `/products/category/{slug}` for a known category, and `/products/search?q=...` for keyword discovery. `limit=100` and `skip` page through up to 500 candidates per intent before local price/brand filtering and ranking. The API has no documented price-filter parameter, so prices are filtered locally. Results are sorted by price, rating or title relevance with stable ID ties; each group displays up to five cards and marks truncated searches. No embeddings or vector database are needed for this small catalog.
 
-## Conversation flow and retrieval
+“Something cheap and cool” asks for a product type. A flight request explains catalog scope. Up to three intents become separate groups; more require prioritization. Mixed requests search supported intents and include a scope note. Follow-ups reconstruct applicable constraints; “cheaper” uses an exclusive threshold below the lowest relevant displayed price. No matches produce an empty-result message. Planning can still misunderstand intent; schema validity is not semantic correctness.
 
-`POST /api/conversations` creates a conversation, `GET /api/conversations` lists past conversations, and `GET /api/conversations/:id` restores its messages. `POST /api/conversations/:id/messages` accepts `{ requestId, content }`; the client generates a UUID request ID and the trimmed message must contain 1–2000 characters. The response is the updated conversation with text and product groups. HTTP errors use `{ error: { code, message } }`.
+Cards use actual catalog titles, descriptions, prices and safe HTTP(S) images, with a missing-image fallback. USD is an application convention because the supplied schema has no currency field; explicit other currencies prompt clarification. Search text is not reused as a claim about inventory or prices.
 
-The chat service coordinates one structured LLM planning call per new turn. A small provider interface has official Gemini and OpenAI SDK implementations. Zod validates the plan, category names, and price ranges before any search is executed. The planner sees the most recent 20 completed messages, previously shown product names and prices, and the previous complete search criteria. It receives no database or arbitrary HTTP execution capability.
+Application endpoints: `POST /api/conversations`, `GET /api/conversations`, `GET /api/conversations/:id` and `POST /api/conversations/:id/messages`. Sending accepts `{ requestId, content }`, where the ID is a UUID and trimmed content has 1–2000 characters. An unknown conversation returns 404.
 
-The backend fetches catalog categories from `/products/category-list` and caches them for five minutes. It retrieves candidate products using `/products/category/{slug}` or `/products/search?q=...`, paging with `limit` and `skip`. It examines at most 500 candidates per intent and explicitly marks a truncated result. Price and brand filtering and ranking happen in the backend before taking up to five cards per group. There are no invented price-filter parameters and no vector database or embeddings.
+## Persistence, retries and failures
 
-The planner asks for clarification on vague requests, explains off-catalog requests, and can split up to three product intents into groups. Follow-ups carry forward the applicable category, brand, and budget. “Cheaper” uses an exclusive threshold based on previously displayed products. More than three intents require prioritization. Mixed supported and unsupported requests receive a catalog-scope note. Product-result summaries are composed from actual results; product titles, descriptions, images, and prices come from DummyJSON.
+SQLite lives at `.data/bazak.sqlite` by default. It stores conversations, ordered messages, search criteria and rendered card snapshots; reopening history does not fetch changed catalog data. Clearing browser storage leaves server history intact. If server-side records are deleted, a refreshed view returns 404. Unsaved local input is lost on reload.
 
-Prices are displayed as USD as an explicit application convention: the supplied catalog schema does not include a currency field. Explicit requests in other currencies should trigger clarification rather than an invented exchange rate.
+Transactions are short and never span network calls. A request ID deduplicates retries within a conversation; reusing it with different content returns 409. Only one turn can be pending per conversation, and only the latest failed message is retryable. Run one API process: startup marks interrupted pending turns as failed. Multiple workers would need leases or job ownership.
 
-## Persistence and failure behavior
+Provider/catalog calls have timeouts, with no automatic paid retries or provider fallback. `LLM_TIMEOUT_MS` defaults to 60000 (maximum 60000); the browser waits up to 120 seconds. Failed turns remain retryable when storage is writable. Optimistic updates reconcile with server state; cached history stays visible during refresh errors, while an authoritative 404 removes it. Switching chats does not put a pending reply into another conversation.
 
-SQLite stores conversations, messages, the last search criteria, and snapshots of rendered product cards. Message order uses an increasing database sequence rather than UUID order. Refreshing the page or restarting the API preserves history, even if catalog products later change. The active conversation is encoded in the URL. Clearing browser storage does not delete the server database.
+Full, unavailable or corrupt storage produces errors rather than false success or an automatic reset. Corrupt search state in one chat does not prevent listing other chats. For a damaged file, stop the API and restore a backup or explicitly select a new `DATABASE_PATH`; there is no automatic repair. A failed write is not confirmed as saved.
 
-A user message is persisted before external calls. Its state is pending, completed, or failed. Successful assistant messages and the user-message state transition are committed together in a short transaction, without holding a database transaction open during network requests. A unique request ID prevents duplicate messages after retries; reusing it with different content is rejected. Only one request may be pending per conversation, and only the latest failed user message can be retried.
+Structured logs go to the console and `.data/logs/api.log`, rotating daily or at 5 MB with seven compressed archives. `LOG_LEVEL=debug` adds diagnostics; `LOG_TO_FILE=false` disables files. File failures fall back to console. Logs allowlist metadata and exclude prompts, message text, credentials and raw provider errors. Correlate events using `X-Request-ID` and `tail -f .data/logs/api.log`. An invalid provider key yields a safe 503 with `LLM_UPSTREAM_HTTP`; internal diagnostics retain the upstream 401.
 
-Run one API process against this local database. On API startup, pending messages left by a stopped process are marked failed so they can be retried. This recovery strategy is deliberately for a single local process; multiple workers would require coordinated leases or job ownership.
-
-External services have timeouts. `LLM_TIMEOUT_MS` configures the selected provider timeout (default 60000 ms, maximum 60000 ms). The browser waits up to 120 seconds to allow for model planning and catalog pagination. Provider calls are not automatically retried. Timeout, rate-limit, invalid-response, catalog, and storage failures have distinct error codes. Server logs contain only allowlisted diagnostic metadata, such as dependency name, reason, upstream HTTP status, and schema field names; they do not include raw SDK errors, prompts, responses, or credentials. Restart the dev server after editing `.env`.
-
-Catalog or model failures retain the failed user message where storage is available. Interrupted requests are not represented as successful responses. Database read/write errors return service-unavailable errors; corruption or a full disk never causes an automatic database reset. If the file is damaged, stop the API and restore a backup or explicitly choose a fresh `DATABASE_PATH`; resetting data is an operator decision.
-
-## Verification at this checkpoint
-
-Install the dedicated Playwright Chromium browser once, then run quality checks and tests:
+## Tests and evaluation
 
 ```sh
 pnpm exec playwright install chromium
@@ -114,54 +93,29 @@ pnpm check
 pnpm test
 ```
 
-On a minimal Linux machine, Playwright may also need OS libraries: use `pnpm exec playwright install --with-deps chromium`. The tests do not require a configured `.env`, real provider credentials, or a running application. They create temporary databases and apply the actual migrations; the development database is untouched. The E2E harness starts its own API and Vite server on ports 39101 and 39102 and refuses to reuse existing servers. Override `E2E_API_PORT` and `E2E_WEB_PORT` if those ports are occupied. Failures retain screenshots and traces in `test-results/`; open the HTML report with `pnpm exec playwright show-report`.
+Minimal Linux installations may require `pnpm exec playwright install --with-deps chromium`. Tests need no credentials or running application: temporary SQLite files use real migrations; external model/catalog HTTP is intercepted with synthetic fixtures. E2E starts separate servers on 39101/39102; override `E2E_API_PORT`/`E2E_WEB_PORT` if occupied. Failed runs retain traces/screenshots in `test-results/`; `pnpm exec playwright show-report` opens the report. Jest uses Node's experimental VM-modules flag for ESM.
 
-| Suite                          | Included coverage                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend integration — 21 cases | Real Nest HTTP routing, validation, services, repositories and SQLite migrations; budget-aware pagination, follow-up context, clarification, unsupported/multiple intents, empty and malformed catalog results, idempotency, concurrent turns, provider errors, transactional write failure, restart recovery, corrupted data and missing conversations. |
-| Browser E2E — 7 cases          | Real React UI → Nest → retrieval → rendered cards; title, description, price and image, refresh persistence, separate conversations and resumption, clarification, unsupported/multiple intents, retries without duplicate messages, switching during a pending response, network failure and 404.                                                       |
-| Backend unit — 21 cases        | Price boundaries, normalized matching, ranking/ties, safe images, pagination limits/repeated pages, factual summaries, classified diagnostics, log redaction and the OpenAI SDK request/response contract.                                                                                                                                               |
-| Frontend unit — 12 cases       | Composer keyboard and IME behavior, image fallback, HTTP errors/cancellation, offline mutations, retry deduplication, stale polling cancellation, cached history during refresh errors and authoritative 404 handling.                                                                                                                                   |
+| Suite                    | What it verifies                                                                                                                                                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend integration (22) | Real Nest routing → services → repositories → SQLite; budget/pagination, follow-ups, ambiguous/unsupported/multiple intents, idempotency, concurrent turns, dependency failures, rollback, restart and corrupt/deleted data. |
+| Browser E2E (7)          | Actual React input → API → retrieval → rendered card fields; reload, multiple conversations, resumption, refinement, retries, pending-chat switching, network failure and 404.                                               |
+| Backend unit (21)        | Price boundaries, matching/ranking, image safety, pagination limits, factual summaries, safe diagnostics and OpenAI SDK serialization/parsing.                                                                               |
+| Frontend unit (12)       | Composer keyboard/IME behavior, images, HTTP errors, offline/retry state, stale polling cancellation and cached-history recovery.                                                                                            |
 
-Tests live in `apps/api/test`, `tests/e2e`, and `apps/web/test`. Backend tests use compiled TypeScript with the same Nest decorator metadata as production; Jest currently needs Node's experimental VM-modules flag for ESM. Frontend unit tests use jsdom; actual browser interaction belongs to Playwright. The full suite currently contains 61 cases.
+All 62 cases pass. The suites catch regressions in the complete application path, but fixtures do not evaluate real model understanding or external-service availability. Timeout errors are simulated; write failure uses a SQLite trigger, not a full physical disk. Browser coverage is desktop Chromium only; there is no load, hardware-recovery or broad prompt-injection evaluation.
 
-All model and catalog HTTP traffic in automated tests is intercepted with deterministic synthetic fixtures. The real SDKs still serialize and parse responses, and the application path through controllers, services and persistence remains intact. Browser product images are served by a test route. Unexpected external destinations are blocked, so these suites incur no model charges. They catch application regressions, not real model interpretation quality, provider availability, current catalog relevance, or physical disk/hardware failure. Timeout tests simulate provider errors rather than waiting for a production-length timeout; the write-failure test uses a SQLite trigger rather than filling the disk. Browser coverage currently uses desktop Chromium only; no performance or multi-worker load evaluation is included.
+On 30 October 2026, clean installation, repeatable migrations and startup were checked in an isolated source copy. Live Gemini and permitted OpenAI `gpt-5.4-mini` each passed five synthetic prompts: budget, cheaper follow-up, ambiguity, off-catalog and multiple intents; history survived restart. A separate intentionally invalid OpenAI key produced one 401, a safe application error and a persisted retryable turn. This is a small smoke sample, not a model-quality benchmark. No existing user conversations were sent during evaluation.
 
-For live verification, start a conversation and request “Find smartphones under $500.” Check the cards, ask “Anything cheaper?”, refresh, switch conversations, and resume an older conversation. Also try “Something cheap and cool,” “Book me a flight to Tokyo,” and a request combining laptops and fragrances. The permitted OpenAI model `gpt-5.4-mini` was checked live during stage 6. Deterministic SDK tests remain separate from this live provider verification.
+## Limitations and another week
 
-On 30 October 2026, the final local review repeated installation and all checks in a temporary copy of the tracked source, without reusing the project's dependencies, build output, environment file, or database. Setup was also checked with `.env.example`, migrations applied twice, and `pnpm dev` on separate ports; frontend HTML, direct API health and the development proxy all responded successfully. Separate live Gemini and OpenAI runs each made five synthetic model calls and checked budget/card fields, an effectively stricter cheaper-than budget, clarification, off-catalog handling and multiple intents. Conversation snapshots also survived an API restart. This is a small smoke evaluation, not a statistically meaningful model-quality benchmark. See the review record for details.
+Local single-user scope: no authentication, checkout, deployment or streaming. Catalog keyword matching misses semantic synonyms; valid plans can still use overly narrow filters. Context is limited to 20 completed messages, three intents, 500 candidates and five displayed products per group. Conversation lists/history are unpaginated. Cold category discovery is needed even for non-search turns. The single-process recovery strategy does not support multiple API workers.
 
-## Logs and troubleshooting
+With another week, prioritize:
 
-The API writes structured JSON logs to the terminal and, by default, `.data/logs/api.log`. Files rotate daily or at 5 MB, with up to seven compressed rotated files retained in addition to the active file. `.data/` is ignored by Git. `LOG_LEVEL` defaults to `info`; use `debug` for category-cache and HTTP-start events. Set `LOG_TO_FILE=false` to keep console output only, or change `LOG_DIRECTORY`. Restart the API after changing `.env`.
+1. A versioned live-query evaluation set for ambiguity, brands, synonyms, currency and follow-ups, recording model accuracy, latency and cost. Improve retrieval using observed failures before introducing embeddings.
+2. Streaming progress/results and explicit cancellation, keeping the current durable turn/retry semantics.
+3. Paginated history and conversation lists, accessibility/mobile browser checks, and stronger storage-failure tests. For shared deployment, add PostgreSQL, authentication and coordinated turn ownership first.
 
-```sh
-tail -f .data/logs/api.log
-```
+## Demo
 
-Each HTTP request receives a server-generated `requestId`, returned in `X-Request-ID`. HTTP, turn, LLM, catalog, and search events share that identifier; turn events also carry a conversation ID and a client-generated `turnId`. Logs include duration, result counts, dependency, upstream status when available, and a classified failure reason. Request bodies, query strings, headers, message text, product contents, and raw provider errors are excluded. SQL queries and their parameters are not logged. Configured provider credentials are also scrubbed from log text as a second line of defense.
-
-```sh
-rg '"requestId":"your-request-id"' .data/logs/api.log
-rg '"event":"llm.failed"' .data/logs/api.log
-```
-
-For example, `LLM_TIMEOUT` identifies a provider timeout, `LLM_RATE_LIMIT` identifies rate limiting, and `LLM_INVALID_RESPONSE` identifies a parsing or plan-validation failure. A bare 503 without a recorded original cause cannot establish which dependency failed; do not assume it means the API key is invalid. File logging falls back to the console if its directory or stream becomes unavailable. In frontend development, failed HTTP calls also print only status, error code, and request ID to the browser console; they are not uploaded to a logging service.
-
-## Current limitations
-
-- Local, single-user application without authentication, checkout, or deployment.
-- English interface and responses; catalog keyword search can miss semantic matches.
-- LLM-generated search plans can misinterpret intent even when they pass schema validation.
-- Context is limited to 20 completed messages plus the previous search state.
-- Three intents per turn, 500 candidates per intent, and five displayed products per group.
-- Conversation lists and histories are not paginated yet.
-- Category discovery is needed before planning a turn; a cold catalog outage also prevents non-search turns.
-- Ready responses with an activity indicator; streaming is deferred and is a candidate improvement for another week.
-
-## Next checkpoints
-
-1. Review the completed stage 6 checkpoint and incorporate candidate feedback.
-2. Stage 7: complete the assignment README, including concrete framework alternatives and improvements for another week. Review the design explanations in your own words before submission.
-
-Each stage ends at a review checkpoint before the next stage begins. Streaming is deferred from the first version and will be documented as a possible improvement.
+Create a chat and ask “Find smartphones under $500.” Inspect the card fields, then ask “Anything cheaper?” Reload, create another conversation, and reopen the first from the sidebar. Finally try “Something cheap and cool,” “Book a flight to Tokyo,” and “Find smartphones under $500 and fragrances under $50.”

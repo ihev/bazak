@@ -1,7 +1,10 @@
 import { conversationSchema, conversationSummarySchema, messageSchema } from '@bazak/contracts';
 import type { conversations, messages } from '../database/schema.js';
 
-type ConversationRow = typeof conversations.$inferSelect;
+type ConversationRow = Pick<
+  typeof conversations.$inferSelect,
+  'id' | 'title' | 'createdAt' | 'updatedAt'
+>;
 type MessageRow = typeof messages.$inferSelect;
 
 export function toSummary(row: ConversationRow) {

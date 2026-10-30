@@ -27,7 +27,12 @@ export class ConversationsRepository {
   list() {
     return databaseOperation(() =>
       this.client.db
-        .select()
+        .select({
+          id: conversations.id,
+          title: conversations.title,
+          createdAt: conversations.createdAt,
+          updatedAt: conversations.updatedAt,
+        })
         .from(conversations)
         .orderBy(desc(conversations.updatedAt), asc(conversations.id))
         .all()

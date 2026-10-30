@@ -14,7 +14,7 @@ const environmentSchema = z.object({
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
   LOG_TO_FILE: z.enum(['true', 'false']).default('true'),
   LOG_DIRECTORY: z.string().trim().min(1).default('.data/logs'),
-  LLM_PROVIDER: z.enum(['gemini', 'openai']).default('gemini'),
+  LLM_PROVIDER: z.enum(['gemini', 'openai']).default('openai'),
   LLM_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(60_000),
   GEMINI_API_KEY: z.string().default(''),
   GEMINI_MODEL: z.string().default(''),

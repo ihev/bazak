@@ -9,6 +9,6 @@ import { ConversationTurnsRepository } from './conversation-turns.repository.js'
   imports: [DatabaseModule],
   controllers: [ConversationsController],
   providers: [ConversationsRepository, ConversationsService, ConversationTurnsRepository],
-  exports: [ConversationsRepository, ConversationsService, ConversationTurnsRepository],
+  exports: [ConversationsRepository, ConversationTurnsRepository],
 })
 export class ConversationsModule {}

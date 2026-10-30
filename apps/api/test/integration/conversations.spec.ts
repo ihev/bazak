@@ -198,6 +198,24 @@ describe('conversation HTTP flow', () => {
     await send(chat.id).expect(404);
   });
 
+  it('keeps conversation summaries and healthy chats available when one search state is corrupt', async () => {
+    const damaged = await create();
+    const healthy = await create();
+    environment.db
+      .prepare("UPDATE conversations SET search_state = 'broken' WHERE id = ?")
+      .run(damaged.id);
+    const list = await request(server()).get('/api/conversations').expect(200);
+    expect(list.body.map((chat: { id: string }) => chat.id).sort()).toEqual(
+      [damaged.id, healthy.id].sort(),
+    );
+    expect(list.body.every((chat: object) => !('searchState' in chat))).toBe(true);
+    await send(damaged.id).expect(503);
+    await send(healthy.id).expect(200);
+    expect(
+      environment.db.prepare('SELECT search_state FROM conversations WHERE id = ?').get(damaged.id),
+    ).toEqual({ search_state: 'broken' });
+  });
+
   it('validates input, logs malformed JSON with an ID, and lists independent conversations', async () => {
     const chat = await create();
     await create();
