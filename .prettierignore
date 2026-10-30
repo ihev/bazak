@@ -6,4 +6,3 @@ pnpm-lock.yaml
 .test-build/
 playwright-report/
 test-results/
-dummyjson_products_openapi.yaml
