@@ -9,7 +9,10 @@
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.tools.json",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
-    "db:migrate": "node --import tsx scripts/migrate.ts"
+    "db:migrate": "node --import tsx scripts/migrate.ts",
+    "test:compile": "tsc -p tsconfig.test.json",
+    "test:integration": "pnpm build && pnpm test:compile && node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --selectProjects integration --runInBand",
+    "test:unit": "pnpm build && pnpm test:compile && node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --selectProjects unit --runInBand"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
@@ -28,10 +31,14 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@jest/globals": "^30.5.2",
+    "@types/supertest": "^7.2.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.5",
     "@types/node": "^24.10.0",
     "drizzle-kit": "^0.31.11",
+    "jest": "^30.5.2",
+    "supertest": "^7.3.1",
     "tsx": "^4.20.6"
   }
 }

@@ -4,7 +4,7 @@ A local conversational product discovery app using the DummyJSON product catalog
 
 ## Current checkpoint
 
-Stage 4: the first architecture and error-state review is complete. The minimal flow includes persisted conversations, in-chat product cards, Gemini and OpenAI adapters, follow-up searches, and retryable failures. Automated tests, a live OpenAI check, and final README answers are still pending. See [the assignment compliance and review record](docs/assignment-review.md) for requirement-by-requirement status; this is not yet a final submission.
+Stage 5: the architecture review and automated test suites are complete. The minimal flow includes persisted conversations, in-chat product cards, Gemini and OpenAI adapters, follow-up searches, and retryable failures. A live OpenAI check, the final clean-setup review, and remaining README answers are still pending. See [the assignment compliance and review record](docs/assignment-review.md) for requirement-by-requirement status; this is not yet a final submission.
 
 ## Requirements
 
@@ -56,6 +56,10 @@ Never commit `.env` or expose provider credentials using `VITE_` variables. LLM 
 | `pnpm typecheck`                 | Check TypeScript types                                            |
 | `pnpm db:generate`               | Generate a migration after changing the database schema           |
 | `pnpm db:migrate`                | Apply pending, versioned database migrations                      |
+| `pnpm test`                      | Run backend integration, browser E2E, then unit suites            |
+| `pnpm test:integration`          | Run Nest HTTP integration tests with a temporary SQLite database  |
+| `pnpm test:e2e`                  | Build the API test harness and run Chromium browser tests         |
+| `pnpm test:unit`                 | Run backend Jest and frontend Vitest/React Testing Library tests  |
 | `pnpm --filter @bazak/api start` | Start the built API                                               |
 
 Database migrations are explicit and are not run automatically at API startup. Run `pnpm db:migrate` after pulling schema changes. Generated SQL migrations and their Drizzle metadata belong in version control; the local database does not.
@@ -100,9 +104,28 @@ Catalog or model failures retain the failed user message where storage is availa
 
 ## Verification at this checkpoint
 
-Run `pnpm check`, then start a conversation and request “Find smartphones under $500.” Check the returned cards, ask “Anything cheaper?”, refresh the page, switch conversations, and resume an older conversation. Also try “Something cheap and cool,” “Book me a flight to Tokyo,” and a request combining laptops and fragrances. An unknown conversation returns a structured 404; an empty or overlong message returns 400.
+Install the dedicated Playwright Chromium browser once, then run quality checks and tests:
 
-Automated tests are intentionally scheduled after the first working version and architecture review: backend integration tests first, browser E2E second, backend and frontend unit tests third. Manual HTTP smoke checks are not a substitute for this suite or browser interaction coverage. The OpenAI adapter must still be checked with an actual permitted key/model before submission; a working Gemini configuration alone does not fulfill that requirement.
+```sh
+pnpm exec playwright install chromium
+pnpm check
+pnpm test
+```
+
+On a minimal Linux machine, Playwright may also need OS libraries: use `pnpm exec playwright install --with-deps chromium`. The tests do not require a configured `.env`, real provider credentials, or a running application. They create temporary databases and apply the actual migrations; the development database is untouched. The E2E harness starts its own API and Vite server on ports 39101 and 39102 and refuses to reuse existing servers. Override `E2E_API_PORT` and `E2E_WEB_PORT` if those ports are occupied. Failures retain screenshots and traces in `test-results/`; open the HTML report with `pnpm exec playwright show-report`.
+
+| Suite                          | Included coverage                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend integration — 21 cases | Real Nest HTTP routing, validation, services, repositories and SQLite migrations; budget-aware pagination, follow-up context, clarification, unsupported/multiple intents, empty and malformed catalog results, idempotency, concurrent turns, provider errors, transactional write failure, restart recovery, corrupted data and missing conversations. |
+| Browser E2E — 7 cases          | Real React UI → Nest → retrieval → rendered cards; title, description, price and image, refresh persistence, separate conversations and resumption, clarification, unsupported/multiple intents, retries without duplicate messages, switching during a pending response, network failure and 404.                                                       |
+| Backend unit — 21 cases        | Price boundaries, normalized matching, ranking/ties, safe images, pagination limits/repeated pages, factual summaries, classified diagnostics, log redaction and the OpenAI SDK request/response contract.                                                                                                                                               |
+| Frontend unit — 12 cases       | Composer keyboard and IME behavior, image fallback, HTTP errors/cancellation, offline mutations, retry deduplication, stale polling cancellation, cached history during refresh errors and authoritative 404 handling.                                                                                                                                   |
+
+Tests live in `apps/api/test`, `tests/e2e`, and `apps/web/test`. Backend tests use compiled TypeScript with the same Nest decorator metadata as production; Jest currently needs Node's experimental VM-modules flag for ESM. Frontend unit tests use jsdom; actual browser interaction belongs to Playwright. The full suite currently contains 61 cases.
+
+All model and catalog HTTP traffic in automated tests is intercepted with deterministic synthetic fixtures. The real SDKs still serialize and parse responses, and the application path through controllers, services and persistence remains intact. Browser product images are served by a test route. Unexpected external destinations are blocked, so these suites incur no model charges. They catch application regressions, not real model interpretation quality, provider availability, current catalog relevance, or physical disk/hardware failure. Timeout tests simulate provider errors rather than waiting for a production-length timeout; the write-failure test uses a SQLite trigger rather than filling the disk. Browser coverage currently uses desktop Chromium only; no performance or multi-worker load evaluation is included.
+
+For live verification, start a conversation and request “Find smartphones under $500.” Check the cards, ask “Anything cheaper?”, refresh, switch conversations, and resume an older conversation. Also try “Something cheap and cool,” “Book me a flight to Tokyo,” and a request combining laptops and fragrances. The OpenAI adapter must still be checked with an actual permitted key/model before submission; deterministic SDK tests and a working Gemini configuration alone do not fulfill that requirement.
 
 ## Logs and troubleshooting
 
@@ -134,9 +157,8 @@ For example, `LLM_TIMEOUT` identifies a provider timeout, `LLM_RATE_LIMIT` ident
 
 ## Next checkpoints
 
-1. Review the stage 4 changes and incorporate user feedback.
-2. Stage 5: add integration, browser E2E, and unit tests, in that order.
-3. Stage 6: repeat the architecture review, run all checks, verify a clean setup, and smoke-test actual Gemini and allowed OpenAI models.
-4. Stage 7: complete the assignment README, including concrete framework alternatives, evaluation limits, and improvements for another week. Review the design explanations in your own words before submission.
+1. Review the stage 5 test suites and incorporate user feedback.
+2. Stage 6: repeat the architecture review, run all checks, verify a clean setup, and smoke-test actual Gemini and allowed OpenAI models.
+3. Stage 7: complete the assignment README, including concrete framework alternatives and improvements for another week. Review the design explanations in your own words before submission.
 
 Each stage ends at a review checkpoint before the next stage begins. Streaming is deferred from the first version and will be documented as a possible improvement.

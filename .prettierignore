@@ -3,4 +3,7 @@ dist/
 coverage/
 pnpm-lock.yaml
 .data/
+.test-build/
+playwright-report/
+test-results/
 dummyjson_products_openapi.yaml

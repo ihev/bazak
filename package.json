@@ -10,15 +10,22 @@
   "scripts": {
     "dev": "pnpm --filter @bazak/contracts build && concurrently --kill-others -n contracts,api,web \"pnpm --filter @bazak/contracts dev\" \"pnpm --filter @bazak/api dev\" \"pnpm --filter @bazak/web dev\"",
     "build": "pnpm -r build",
-    "typecheck": "pnpm --filter @bazak/contracts build && pnpm -r typecheck",
+    "typecheck": "pnpm --filter @bazak/contracts build && pnpm -r typecheck && pnpm --filter @bazak/api build && pnpm --filter @bazak/api test:compile && tsc -p tsconfig.e2e.json",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build",
     "db:generate": "pnpm --filter @bazak/api db:generate",
-    "db:migrate": "pnpm --filter @bazak/api db:migrate"
+    "db:migrate": "pnpm --filter @bazak/api db:migrate",
+    "test:integration": "pnpm --filter @bazak/contracts build && pnpm --filter @bazak/api test:integration",
+    "test:e2e:prepare": "pnpm --filter @bazak/contracts build && pnpm --filter @bazak/api build && pnpm --filter @bazak/api test:compile",
+    "test:e2e": "pnpm test:e2e:prepare && playwright test",
+    "test:unit": "pnpm --filter @bazak/contracts build && pnpm --filter @bazak/api test:unit && pnpm --filter @bazak/web test:unit",
+    "test": "pnpm test:integration && pnpm test:e2e && pnpm test:unit"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^24.10.0",
     "@eslint/js": "^10.0.0",
     "concurrently": "^9.2.1",
     "eslint": "^10.13.0",
