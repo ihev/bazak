@@ -1,0 +1,39 @@
+.message {
+  padding: 1rem 1.2rem;
+  border-radius: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.user {
+  align-self: flex-end;
+  width: fit-content;
+  max-width: 85%;
+  background: #eef1f8;
+}
+.assistant {
+  align-self: stretch;
+}
+.author {
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+.content {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-size: 0.95rem;
+}
+.failure {
+  color: #963f32;
+  font-size: 0.8rem;
+}
+.failure button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

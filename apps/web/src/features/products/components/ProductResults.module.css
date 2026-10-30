@@ -1,0 +1,29 @@
+.results {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.heading h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.heading span,
+.note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.note {
+  line-height: 1.5;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: 0.75rem;
+}

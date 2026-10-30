@@ -3,8 +3,10 @@ packages:
   - packages/*
 
 allowBuilds:
+  '@google/genai': false
   '@nestjs/core': false
   better-sqlite3: true
   esbuild: true
+  protobufjs: false
 
 strictPeerDependencies: true

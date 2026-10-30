@@ -9,7 +9,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Link className={styles.brand} to="/">
           Bazak <span>Shopping Copilot</span>
         </Link>
-        <span className={styles.badge}>Local preview</span>
+        <span className={styles.badge}>Sample product catalog</span>
       </header>
       <main className={styles.main}>{children}</main>
     </div>

@@ -4,7 +4,7 @@ A local conversational product discovery app using the DummyJSON product catalog
 
 ## Current checkpoint
 
-Stage 2: project foundation. The API exposes a database-backed health endpoint and the web app displays its status. Conversation management, product retrieval, and LLM adapters are planned for stage 3. The application is not yet a completed assignment submission.
+Stage 3: the minimal conversational product discovery flow is implemented. It includes persisted conversations, in-chat product cards, Gemini and OpenAI adapters, follow-up searches, and retryable failures. Architecture review and automated tests are the next checkpoints; this is not yet a final submission.
 
 ## Requirements
 
@@ -18,13 +18,28 @@ Run commands from the workspace root:
 ```sh
 pnpm install --frozen-lockfile
 cp .env.example .env
+```
+
+Edit `.env` before starting the API:
+
+```dotenv
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your-local-key
+GEMINI_MODEL=your-enabled-model-id
+```
+
+Use the exact Gemini model ID available to your account. To use the assignment provider instead, set `LLM_PROVIDER=openai`, supply `OPENAI_API_KEY`, and use `OPENAI_MODEL=gpt-5.4-mini` or `gpt-5.4-nano`. The API validates the selected provider configuration at startup. It does not automatically switch providers or retry paid LLM calls.
+
+Then run:
+
+```sh
 pnpm db:migrate
 pnpm dev
 ```
 
 Open <http://localhost:5173>. The API runs on <http://127.0.0.1:3001/api>; `GET /api/health` verifies that the migrated database is readable. The Vite development server proxies `/api` requests to Nest.
 
-No LLM credentials are needed for this checkpoint. Stage 3 will introduce provider configuration and validate the selected provider's credentials. Never commit `.env` or expose provider credentials using `VITE_` variables.
+Never commit `.env` or expose provider credentials using `VITE_` variables. LLM SDKs and credentials stay exclusively in the backend. Migration commands do not require LLM credentials.
 
 `API_HOST`, `API_PORT`, `WEB_PORT`, `WEB_ORIGIN`, and `DATABASE_PATH` can be configured in the root `.env` file. Relative database paths are resolved from the workspace root, regardless of the shell's working directory. If port 5173 is occupied, change `WEB_PORT` and update `WEB_ORIGIN` to match. Environment variables provided by the shell take precedence over `.env`.
 
@@ -57,18 +72,52 @@ SQLite and Drizzle keep this local assignment easy to run without Docker or a da
 
 Connections enable foreign keys, a busy timeout, and WAL journaling. The database connection is closed during graceful shutdown. Failures do not automatically reset or delete data.
 
+## Conversation flow and retrieval
+
+`POST /api/conversations` creates a conversation, `GET /api/conversations` lists past conversations, and `GET /api/conversations/:id` restores its messages. `POST /api/conversations/:id/messages` accepts `{ requestId, content }`; the client generates a UUID request ID and the trimmed message must contain 1–2000 characters. The response is the updated conversation with text and product groups. HTTP errors use `{ error: { code, message } }`.
+
+The chat service coordinates one structured LLM planning call per new turn. A small provider interface has official Gemini and OpenAI SDK implementations. Zod validates the plan, category names, and price ranges before any search is executed. The planner sees the most recent 20 completed messages, previously shown product names and prices, and the previous complete search criteria. It receives no database or arbitrary HTTP execution capability.
+
+The backend fetches catalog categories from `/products/category-list` and caches them for five minutes. It retrieves candidate products using `/products/category/{slug}` or `/products/search?q=...`, paging with `limit` and `skip`. It examines at most 500 candidates per intent and explicitly marks a truncated result. Price and brand filtering and ranking happen in the backend before taking up to five cards per group. There are no invented price-filter parameters and no vector database or embeddings.
+
+The planner asks for clarification on vague requests, explains off-catalog requests, and can split up to three product intents into groups. Follow-ups carry forward the applicable category, brand, and budget. “Cheaper” uses an exclusive threshold based on previously displayed products. More than three intents require prioritization. Mixed supported and unsupported requests receive a catalog-scope note. Product-result summaries are composed from actual results; product titles, descriptions, images, and prices come from DummyJSON.
+
+Prices are displayed as USD as an explicit application convention: the supplied catalog schema does not include a currency field. Explicit requests in other currencies should trigger clarification rather than an invented exchange rate.
+
+## Persistence and failure behavior
+
+SQLite stores conversations, messages, the last search criteria, and snapshots of rendered product cards. Message order uses an increasing database sequence rather than UUID order. Refreshing the page or restarting the API preserves history, even if catalog products later change. The active conversation is encoded in the URL. Clearing browser storage does not delete the server database.
+
+A user message is persisted before external calls. Its state is pending, completed, or failed. Successful assistant messages and the user-message state transition are committed together in a short transaction, without holding a database transaction open during network requests. A unique request ID prevents duplicate messages after retries; reusing it with different content is rejected. Only one request may be pending per conversation, and only the latest failed user message can be retried.
+
+Run one API process against this local database. On API startup, pending messages left by a stopped process are marked failed so they can be retried. This recovery strategy is deliberately for a single local process; multiple workers would require coordinated leases or job ownership.
+
+External services have timeouts. `LLM_TIMEOUT_MS` configures the selected provider timeout (default 60000 ms, maximum 60000 ms). The browser waits up to 120 seconds to allow for model planning and catalog pagination. Provider calls are not automatically retried. Timeout, rate-limit, invalid-response, catalog, and storage failures have distinct error codes. Server logs contain only allowlisted diagnostic metadata, such as dependency name, reason, upstream HTTP status, and schema field names; they do not include raw SDK errors, prompts, responses, or credentials. Restart the dev server after editing `.env`.
+
+Catalog or model failures retain the failed user message where storage is available. Interrupted requests are not represented as successful responses. Database read/write errors return service-unavailable errors; corruption or a full disk never causes an automatic database reset. If the file is damaged, stop the API and restore a backup or explicitly choose a fresh `DATABASE_PATH`; resetting data is an operator decision.
+
 ## Verification at this checkpoint
 
-Run `pnpm check`, then start the app and verify that the page reports “API connected · Database ready.” An unknown API route returns a structured JSON error. With the API stopped, the page provides an error message and a retry action.
+Run `pnpm check`, then start a conversation and request “Find smartphones under $500.” Check the returned cards, ask “Anything cheaper?”, refresh the page, switch conversations, and resume an older conversation. Also try “Something cheap and cool,” “Book me a flight to Tokyo,” and a request combining laptops and fragrances. An unknown conversation returns a structured 404; an empty or overlong message returns 400.
 
-Automated tests are intentionally scheduled after the first working version and architecture review: backend integration tests first, browser E2E second, backend and frontend unit tests third. This checkpoint does not claim test coverage or working LLM integration.
+Automated tests are intentionally scheduled after the first working version and architecture review: backend integration tests first, browser E2E second, backend and frontend unit tests third. Manual HTTP smoke checks are not a substitute for this suite or browser interaction coverage. The OpenAI adapter must still be checked with an actual permitted key/model before submission; a working Gemini configuration alone does not fulfill that requirement.
+
+## Current limitations
+
+- Local, single-user application without authentication, checkout, or deployment.
+- English interface and responses; catalog keyword search can miss semantic matches.
+- LLM-generated search plans can misinterpret intent even when they pass schema validation.
+- Context is limited to 20 completed messages plus the previous search state.
+- Three intents per turn, 500 candidates per intent, and five displayed products per group.
+- Conversation lists and histories are not paginated yet.
+- Category discovery is needed before planning a turn; a cold catalog outage also prevents non-search turns.
+- Ready responses with an activity indicator; streaming is deferred and is a candidate improvement for another week.
 
 ## Next checkpoints
 
-1. Stage 3: implement the complete conversational product discovery flow and persistence.
-2. Stage 4: review architecture, errors, edge cases, and user feedback.
-3. Stage 5: add integration, browser E2E, and unit tests, in that order.
-4. Stage 6: repeat the architecture review, run all checks, verify a clean setup, and smoke-test actual Gemini and allowed OpenAI models.
-5. Stage 7: complete the assignment README, including framework alternatives, retrieval strategy, storage failure behavior, evaluation limits, known limitations, and improvements for another week.
+1. Stage 4: review architecture, errors, edge cases, and user feedback.
+2. Stage 5: add integration, browser E2E, and unit tests, in that order.
+3. Stage 6: repeat the architecture review, run all checks, verify a clean setup, and smoke-test actual Gemini and allowed OpenAI models.
+4. Stage 7: complete the assignment README, including concrete framework alternatives, evaluation limits, and improvements for another week. Review the design explanations in your own words before submission.
 
 Each stage ends at a review checkpoint before the next stage begins. Streaming is deferred from the first version and will be documented as a possible improvement.

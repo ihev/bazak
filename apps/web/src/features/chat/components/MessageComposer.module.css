@@ -1,0 +1,45 @@
+.composer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: white;
+}
+.label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+.row textarea {
+  width: 100%;
+  min-width: 0;
+  max-height: 10rem;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  resize: vertical;
+  font: inherit;
+  font-size: 0.95rem;
+}
+.row button {
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--text);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+.row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.composer p {
+  margin: 0.6rem 0 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}

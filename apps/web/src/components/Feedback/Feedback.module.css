@@ -1,0 +1,26 @@
+.feedback {
+  padding: 0.85rem 1rem;
+  border: 1px solid #e6c7c2;
+  background: #fff7f5;
+  border-radius: 0.6rem;
+  color: #843b31;
+  font-size: 0.9rem;
+}
+.feedback p {
+  margin: 0;
+  line-height: 1.5;
+}
+.feedback button {
+  margin-top: 0.6rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.feedback button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}

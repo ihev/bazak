@@ -1,5 +1,6 @@
 import { HealthResponse } from '@bazak/contracts';
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { DependencyUnavailableException } from '../common/http/dependency-unavailable.exception.js';
 import { DatabaseHealthRepository } from '../database/database-health.repository.js';
 
 @Injectable()
@@ -9,9 +10,11 @@ export class HealthService {
   getStatus(): HealthResponse {
     try {
       this.repository.assertReadable();
-    } catch {
-      throw new ServiceUnavailableException(
+    } catch (error) {
+      throw new DependencyUnavailableException(
+        'storage',
         'Database unavailable. Check the database and migrations.',
+        error,
       );
     }
 

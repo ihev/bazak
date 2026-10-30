@@ -21,4 +21,18 @@ export class AppConfigService {
   get databasePath(): string {
     return resolve(workspaceRoot, this.environment.DATABASE_PATH);
   }
+
+  get llm() {
+    const provider = this.environment.LLM_PROVIDER;
+    const apiKey =
+      provider === 'gemini' ? this.environment.GEMINI_API_KEY : this.environment.OPENAI_API_KEY;
+    const model =
+      provider === 'gemini' ? this.environment.GEMINI_MODEL : this.environment.OPENAI_MODEL;
+    if (!apiKey.trim() || !model.trim()) {
+      throw new Error(
+        `Configure ${provider === 'gemini' ? 'GEMINI_API_KEY and GEMINI_MODEL' : 'OPENAI_API_KEY'} in the root .env file.`,
+      );
+    }
+    return { provider, apiKey, model, timeoutMs: this.environment.LLM_TIMEOUT_MS };
+  }
 }
