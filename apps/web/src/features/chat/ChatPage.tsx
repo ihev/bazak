@@ -28,9 +28,16 @@ export function ChatPage() {
         </button>
         {create.isError && <Feedback message="Unable to create a conversation. Please retry." />}
         <h2>Conversations</h2>
+        {conversations.isRefetchError && conversations.data && (
+          <Feedback
+            message="Unable to refresh conversations. Showing the last loaded list."
+            onRetry={() => void conversations.refetch()}
+            busy={conversations.isFetching}
+          />
+        )}
         {conversations.isPending ? (
           <p role="status">Loading…</p>
-        ) : conversations.isError ? (
+        ) : !conversations.data ? (
           <Feedback
             message="Unable to load conversations."
             onRetry={() => void conversations.refetch()}

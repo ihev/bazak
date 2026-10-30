@@ -1,5 +1,11 @@
 import { ProductGroup, SendMessageRequest } from '@bazak/contracts';
-import { ConflictException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DatabaseClient } from '../database/database.client.js';
@@ -9,17 +15,20 @@ import { SearchCriteria } from '../products/search-criteria.js';
 
 @Injectable()
 export class ConversationTurnsRepository implements OnModuleInit {
+  private readonly logger = new Logger(ConversationTurnsRepository.name);
   constructor(private readonly client: DatabaseClient) {}
 
   onModuleInit(): void {
     // A single local API process owns pending turns. Interrupted turns remain retryable after restart.
-    databaseOperation(() =>
+    const result = databaseOperation(() =>
       this.client.db
         .update(messages)
         .set({ status: 'failed' })
         .where(eq(messages.status, 'pending'))
         .run(),
     );
+    if (result.changes)
+      this.logger.warn({ event: 'turn.interrupted_recovered', count: result.changes });
   }
 
   beginTurn(id: string, request: SendMessageRequest): { messageId: string; cached: boolean } {

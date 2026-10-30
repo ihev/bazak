@@ -35,4 +35,12 @@ export class AppConfigService {
     }
     return { provider, apiKey, model, timeoutMs: this.environment.LLM_TIMEOUT_MS };
   }
+
+  get logging() {
+    return {
+      level: this.environment.LOG_LEVEL,
+      toFile: this.environment.LOG_TO_FILE === 'true',
+      directory: resolve(workspaceRoot, this.environment.LOG_DIRECTORY),
+    };
+  }
 }

@@ -17,7 +17,10 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         Loading conversation…
       </p>
     );
-  if (conversation.isError)
+  if (
+    !conversation.data ||
+    (conversation.error instanceof ApiRequestError && conversation.error.status === 404)
+  )
     return (
       <div className={styles.status}>
         <Feedback
@@ -34,6 +37,12 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     );
   const busy =
     send.isPending || conversation.data.messages.some((message) => message.status === 'pending');
+  const sentMessage = conversation.data.messages.find(
+    (message) => message.requestId === send.variables?.requestId,
+  );
+  const latestUser = conversation.data.messages.findLast((message) => message.role === 'user');
+  const showSendError = send.isError && sentMessage?.status !== 'completed';
+  const canRetrySend = !busy && (!sentMessage || sentMessage.id === latestUser?.id);
   function retry(message: Message) {
     if (message.requestId) send.mutate({ requestId: message.requestId, content: message.content });
   }
@@ -42,8 +51,17 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
       <header className={styles.header}>
         <h1>{conversation.data.title}</h1>
       </header>
+      {conversation.isRefetchError && (
+        <div className={styles.error}>
+          <Feedback
+            message="Unable to refresh this conversation. Showing the last loaded history."
+            onRetry={() => void conversation.refetch()}
+            busy={conversation.isFetching}
+          />
+        </div>
+      )}
       <MessageList messages={conversation.data.messages} busy={busy} onRetry={retry} />
-      {send.isError && (
+      {showSendError && (
         <div className={styles.error}>
           <Feedback
             message={
@@ -51,9 +69,13 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                 ? send.error.message
                 : 'The service returned an unexpected response. Please retry.'
             }
-            onRetry={() => {
-              if (send.variables) send.mutate(send.variables);
-            }}
+            {...(canRetrySend
+              ? {
+                  onRetry: () => {
+                    if (send.variables) send.mutate(send.variables);
+                  },
+                }
+              : {})}
             busy={busy}
           />
         </div>

@@ -1,15 +1,11 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module.js';
+import { createApp } from './create-app.js';
 import { AppConfigService } from './config/app-config.service.js';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bodyParser: true });
+  const app = await createApp();
   const config = app.get(AppConfigService);
-  app.setGlobalPrefix('api');
-  app.enableCors({ origin: config.webOrigin });
-  app.enableShutdownHooks();
   await app.listen(config.port, config.host);
   Logger.log(`API listening on http://${config.host}:${config.port}/api`, 'Bootstrap');
 }

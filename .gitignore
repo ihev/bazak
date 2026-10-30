@@ -11,6 +11,7 @@ coverage/
 *.db-*
 *.tsbuildinfo
 *.log
+*.log.*
 .DS_Store
 .pnpm-store/
 playwright-report/

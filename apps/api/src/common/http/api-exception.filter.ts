@@ -26,15 +26,22 @@ export class ApiExceptionFilter implements ExceptionFilter {
           : 'An unexpected error occurred.';
 
     if (status >= 500) {
-      this.logger.error(
-        JSON.stringify({
-          event: 'request_failed',
-          httpStatus: status,
-          ...(exception instanceof DependencyUnavailableException
-            ? { dependency: exception.dependency, code: exception.code, ...exception.details }
-            : { code: errorCodes[status] ?? 'INTERNAL_ERROR' }),
-        }),
-      );
+      this.logger.error({
+        event: 'request_failed',
+        httpStatus: status,
+        ...(exception instanceof DependencyUnavailableException
+          ? { dependency: exception.dependency, code: exception.code, ...exception.details }
+          : {
+              code: errorCodes[status] ?? 'INTERNAL_ERROR',
+              stackFrames:
+                exception instanceof Error
+                  ? exception.stack
+                      ?.split('\n')
+                      .filter((line) => /\bat .*\/apps\/api\/(src|dist)\//.test(line))
+                      .slice(0, 5)
+                  : [],
+            }),
+      });
     }
 
     const body: ApiErrorResponse = {

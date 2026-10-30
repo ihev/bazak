@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DependencyUnavailableException } from '../common/http/dependency-unavailable.exception.js';
 import { z } from 'zod';
 import { catalogProductSchema, toCatalogProduct } from './catalog-product.js';
@@ -11,13 +11,17 @@ const pageSchema = z.object({
 
 @Injectable()
 export class DummyJsonClient {
+  private readonly logger = new Logger(DummyJsonClient.name);
   private categoryCache: { values: string[]; expiresAt: number } | null = null;
 
   async categories(): Promise<string[]> {
-    if (this.categoryCache && this.categoryCache.expiresAt > Date.now())
+    if (this.categoryCache && this.categoryCache.expiresAt > Date.now()) {
+      this.logger.debug({ event: 'catalog.categories', cacheHit: true });
       return this.categoryCache.values;
+    }
     const values = z.array(z.string().min(1)).parse(await this.request('/products/category-list'));
     this.categoryCache = { values, expiresAt: Date.now() + 300_000 };
+    this.logger.log({ event: 'catalog.categories', cacheHit: false, count: values.length });
     return values;
   }
 
@@ -43,6 +47,13 @@ export class DummyJsonClient {
   }
 
   private async request(path: string): Promise<unknown> {
+    const start = performance.now();
+    const resource = path.startsWith('/products/category-list')
+      ? 'categories'
+      : path.startsWith('/products/category/')
+        ? 'category'
+        : 'search';
+    this.logger.debug({ event: 'catalog.request_started', resource });
     try {
       const response = await fetch(`https://dummyjson.com${path}`, {
         signal: AbortSignal.timeout(8000),
@@ -55,8 +66,20 @@ export class DummyJsonClient {
           undefined,
           { reason: 'upstream_http', upstreamStatus: response.status },
         );
-      return await response.json();
+      const body: unknown = await response.json();
+      this.logger.log({
+        event: 'catalog.request_completed',
+        resource,
+        status: response.status,
+        durationMs: Math.round(performance.now() - start),
+      });
+      return body;
     } catch (error) {
+      this.logger.warn({
+        event: 'catalog.request_failed',
+        resource,
+        durationMs: Math.round(performance.now() - start),
+      });
       if (error instanceof DependencyUnavailableException) throw error;
       throw new DependencyUnavailableException(
         'catalog',

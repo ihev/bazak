@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   DependencyUnavailableException,
   describeFailure,
@@ -13,10 +13,15 @@ import { LlmResponseError } from './llm-response.error.js';
 
 @Injectable()
 export class LlmManager {
+  private readonly logger = new Logger(LlmManager.name);
   private readonly provider: LlmProvider;
+  private readonly providerName: string;
+  private readonly timeoutMs: number;
 
   constructor(config: AppConfigService) {
     const { provider, apiKey, model, timeoutMs } = config.llm;
+    this.providerName = provider;
+    this.timeoutMs = timeoutMs;
     this.provider =
       provider === 'gemini'
         ? new GeminiProvider(apiKey, model, timeoutMs)
@@ -24,10 +29,22 @@ export class LlmManager {
   }
 
   async plan(context: DiscoveryContext) {
+    const start = performance.now();
+    this.logger.log({
+      event: 'llm.started',
+      provider: this.providerName,
+      timeoutMs: this.timeoutMs,
+    });
     try {
       const plan = await this.provider.plan(discoverySystemPrompt, JSON.stringify(context));
       if (plan.action !== 'search') {
         if (plan.searches.length) throw new LlmResponseError('unexpected_searches');
+        this.logger.log({
+          event: 'llm.completed',
+          action: plan.action,
+          searches: 0,
+          durationMs: Math.round(performance.now() - start),
+        });
         return plan;
       }
       if (!plan.searches.length) throw new LlmResponseError('missing_searches');
@@ -42,12 +59,24 @@ export class LlmManager {
         )
           throw new LlmResponseError('invalid_price_range');
       }
+      this.logger.log({
+        event: 'llm.completed',
+        action: plan.action,
+        searches: plan.searches.length,
+        durationMs: Math.round(performance.now() - start),
+      });
       return plan;
     } catch (error) {
       const details =
         error instanceof LlmResponseError
           ? { reason: 'invalid_response' as const, fields: [error.issue] }
           : describeFailure(error);
+      this.logger.warn({
+        event: 'llm.failed',
+        provider: this.providerName,
+        durationMs: Math.round(performance.now() - start),
+        ...details,
+      });
       const message =
         details.reason === 'timeout'
           ? 'The AI service took too long to respond. Please retry.'

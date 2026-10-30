@@ -4,7 +4,7 @@ A local conversational product discovery app using the DummyJSON product catalog
 
 ## Current checkpoint
 
-Stage 3: the minimal conversational product discovery flow is implemented. It includes persisted conversations, in-chat product cards, Gemini and OpenAI adapters, follow-up searches, and retryable failures. Architecture review and automated tests are the next checkpoints; this is not yet a final submission.
+Stage 4: the first architecture and error-state review is complete. The minimal flow includes persisted conversations, in-chat product cards, Gemini and OpenAI adapters, follow-up searches, and retryable failures. Automated tests, a live OpenAI check, and final README answers are still pending. See [the assignment compliance and review record](docs/assignment-review.md) for requirement-by-requirement status; this is not yet a final submission.
 
 ## Requirements
 
@@ -68,6 +68,8 @@ Database migrations are explicit and are not run automatically at API startup. R
 
 The API is compiled with TypeScript's decorator metadata enabled, including during development, so Nest constructor injection behaves consistently in development and built code. The API TypeScript import-style lint exception preserves runtime class references required by decorator metadata.
 
+`ChatService` owns turn persistence and lifecycle; `ChatDiscoveryService` constructs the bounded model context and coordinates catalog discovery. Factual result wording and product ranking/filtering are separate pure functions. Frontend mutation callbacks reconcile optimistic messages with server state; failed sends remain retryable without leaving the composer permanently blocked. Background refresh errors preserve cached history while an authoritative 404 replaces it. Local optimistic messages are not durable until the API accepts them, so an unsent message cannot survive a page refresh during a network outage.
+
 SQLite and Drizzle keep this local assignment easy to run without Docker or a database server. For a future shared service with greater concurrency and operational requirements, PostgreSQL would be the preferred database. Repositories contain the database-specific implementation, but changing databases still requires appropriate Drizzle schema changes and migrations.
 
 Connections enable foreign keys, a busy timeout, and WAL journaling. The database connection is closed during graceful shutdown. Failures do not automatically reset or delete data.
@@ -102,6 +104,23 @@ Run `pnpm check`, then start a conversation and request “Find smartphones unde
 
 Automated tests are intentionally scheduled after the first working version and architecture review: backend integration tests first, browser E2E second, backend and frontend unit tests third. Manual HTTP smoke checks are not a substitute for this suite or browser interaction coverage. The OpenAI adapter must still be checked with an actual permitted key/model before submission; a working Gemini configuration alone does not fulfill that requirement.
 
+## Logs and troubleshooting
+
+The API writes structured JSON logs to the terminal and, by default, `.data/logs/api.log`. Files rotate daily or at 5 MB, with up to seven compressed rotated files retained in addition to the active file. `.data/` is ignored by Git. `LOG_LEVEL` defaults to `info`; use `debug` for category-cache and HTTP-start events. Set `LOG_TO_FILE=false` to keep console output only, or change `LOG_DIRECTORY`. Restart the API after changing `.env`.
+
+```sh
+tail -f .data/logs/api.log
+```
+
+Each HTTP request receives a server-generated `requestId`, returned in `X-Request-ID`. HTTP, turn, LLM, catalog, and search events share that identifier; turn events also carry a conversation ID and a client-generated `turnId`. Logs include duration, result counts, dependency, upstream status when available, and a classified failure reason. Request bodies, query strings, headers, message text, product contents, and raw provider errors are excluded. SQL queries and their parameters are not logged. Configured provider credentials are also scrubbed from log text as a second line of defense.
+
+```sh
+rg '"requestId":"your-request-id"' .data/logs/api.log
+rg '"event":"llm.failed"' .data/logs/api.log
+```
+
+For example, `LLM_TIMEOUT` identifies a provider timeout, `LLM_RATE_LIMIT` identifies rate limiting, and `LLM_INVALID_RESPONSE` identifies a parsing or plan-validation failure. A bare 503 without a recorded original cause cannot establish which dependency failed; do not assume it means the API key is invalid. File logging falls back to the console if its directory or stream becomes unavailable. In frontend development, failed HTTP calls also print only status, error code, and request ID to the browser console; they are not uploaded to a logging service.
+
 ## Current limitations
 
 - Local, single-user application without authentication, checkout, or deployment.
@@ -115,7 +134,7 @@ Automated tests are intentionally scheduled after the first working version and 
 
 ## Next checkpoints
 
-1. Stage 4: review architecture, errors, edge cases, and user feedback.
+1. Review the stage 4 changes and incorporate user feedback.
 2. Stage 5: add integration, browser E2E, and unit tests, in that order.
 3. Stage 6: repeat the architecture review, run all checks, verify a clean setup, and smoke-test actual Gemini and allowed OpenAI models.
 4. Stage 7: complete the assignment README, including concrete framework alternatives, evaluation limits, and improvements for another week. Review the design explanations in your own words before submission.
