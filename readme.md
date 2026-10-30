@@ -4,7 +4,7 @@ A local conversational product discovery app using the DummyJSON product catalog
 
 ## Current checkpoint
 
-Stage 5: the architecture review and automated test suites are complete. The minimal flow includes persisted conversations, in-chat product cards, Gemini and OpenAI adapters, follow-up searches, and retryable failures. A live OpenAI check, the final clean-setup review, and remaining README answers are still pending. See [the assignment compliance and review record](docs/assignment-review.md) for requirement-by-requirement status; this is not yet a final submission.
+Stage 6 is complete: clean installation, migrations, startup, all 61 automated tests, and live Gemini and OpenAI checks pass. The review also fixed production builds inheriting the backend's development environment. The final README answers and submission materials still need completion in stage 7. See [the assignment compliance and review record](docs/assignment-review.md) for evidence and remaining requirements; this is not yet a final submission.
 
 ## Requirements
 
@@ -42,6 +42,8 @@ Open <http://localhost:5173>. The API runs on <http://127.0.0.1:3001/api>; `GET 
 Never commit `.env` or expose provider credentials using `VITE_` variables. LLM SDKs and credentials stay exclusively in the backend. Migration commands do not require LLM credentials.
 
 `API_HOST`, `API_PORT`, `WEB_PORT`, `WEB_ORIGIN`, and `DATABASE_PATH` can be configured in the root `.env` file. Relative database paths are resolved from the workspace root, regardless of the shell's working directory. If port 5173 is occupied, change `WEB_PORT` and update `WEB_ORIGIN` to match. Environment variables provided by the shell take precedence over `.env`.
+
+Vite reads the shared `.env` for server host and port settings using Node's environment parser. This does not change its build mode: `NODE_ENV=development` in the backend configuration must not turn `pnpm build` into a frontend development build. The normal root configuration uses this single `.env`; mode-specific root files are not loaded by the frontend configuration.
 
 ## Commands
 
@@ -125,7 +127,9 @@ Tests live in `apps/api/test`, `tests/e2e`, and `apps/web/test`. Backend tests u
 
 All model and catalog HTTP traffic in automated tests is intercepted with deterministic synthetic fixtures. The real SDKs still serialize and parse responses, and the application path through controllers, services and persistence remains intact. Browser product images are served by a test route. Unexpected external destinations are blocked, so these suites incur no model charges. They catch application regressions, not real model interpretation quality, provider availability, current catalog relevance, or physical disk/hardware failure. Timeout tests simulate provider errors rather than waiting for a production-length timeout; the write-failure test uses a SQLite trigger rather than filling the disk. Browser coverage currently uses desktop Chromium only; no performance or multi-worker load evaluation is included.
 
-For live verification, start a conversation and request “Find smartphones under $500.” Check the cards, ask “Anything cheaper?”, refresh, switch conversations, and resume an older conversation. Also try “Something cheap and cool,” “Book me a flight to Tokyo,” and a request combining laptops and fragrances. The OpenAI adapter must still be checked with an actual permitted key/model before submission; deterministic SDK tests and a working Gemini configuration alone do not fulfill that requirement.
+For live verification, start a conversation and request “Find smartphones under $500.” Check the cards, ask “Anything cheaper?”, refresh, switch conversations, and resume an older conversation. Also try “Something cheap and cool,” “Book me a flight to Tokyo,” and a request combining laptops and fragrances. The permitted OpenAI model `gpt-5.4-mini` was checked live during stage 6. Deterministic SDK tests remain separate from this live provider verification.
+
+On 30 October 2026, the final local review repeated installation and all checks in a temporary copy of the tracked source, without reusing the project's dependencies, build output, environment file, or database. Setup was also checked with `.env.example`, migrations applied twice, and `pnpm dev` on separate ports; frontend HTML, direct API health and the development proxy all responded successfully. Separate live Gemini and OpenAI runs each made five synthetic model calls and checked budget/card fields, an effectively stricter cheaper-than budget, clarification, off-catalog handling and multiple intents. Conversation snapshots also survived an API restart. This is a small smoke evaluation, not a statistically meaningful model-quality benchmark. See the review record for details.
 
 ## Logs and troubleshooting
 
@@ -157,8 +161,7 @@ For example, `LLM_TIMEOUT` identifies a provider timeout, `LLM_RATE_LIMIT` ident
 
 ## Next checkpoints
 
-1. Review the stage 5 test suites and incorporate user feedback.
-2. Stage 6: repeat the architecture review, run all checks, verify a clean setup, and smoke-test actual Gemini and allowed OpenAI models.
-3. Stage 7: complete the assignment README, including concrete framework alternatives and improvements for another week. Review the design explanations in your own words before submission.
+1. Review the completed stage 6 checkpoint and incorporate candidate feedback.
+2. Stage 7: complete the assignment README, including concrete framework alternatives and improvements for another week. Review the design explanations in your own words before submission.
 
 Each stage ends at a review checkpoint before the next stage begins. Streaming is deferred from the first version and will be documented as a possible improvement.
